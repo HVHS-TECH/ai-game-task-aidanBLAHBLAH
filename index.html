@@ -1,13 +1,206 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Page Title</title>
+  <meta charset="UTF-8">
+  <title>Space Invaders</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      overflow: hidden;
+      font-family: 'Segoe UI', sans-serif;
+      color: white;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background: #000;
+      border: 2px solid white;
+    }
+    #hud, #controls {
+      text-align: center;
+      padding: 10px;
+      font-size: 20px;
+    }
+    #reloadButton {
+      display: none;
+      margin-top: 10px;
+      padding: 5px 15px;
+      font-size: 16px;
+    }
+  </style>
 </head>
 <body>
+  <div id="hud">
+    Score: <span id="score">0</span> | Lives: <span id="lives">3</span>
+  </div>
+  <div id="controls">
+    <button id="reloadButton">Restart Game</button>
+  </div>
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
 
-<h1>This is a Heading</h1>
-<p>This is a paragraph.</p>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const livesEl = document.getElementById("lives");
+    const reloadButton = document.getElementById("reloadButton");
 
+    let player, bullets, enemies, enemyBullets, houses;
+    let score = 0;
+    let lives = 3;
+    let keys = {};
+    let gameOver = false;
+
+    const playerImg = new Image();
+    playerImg.src = 'https://i.imgur.com/8Q0G5ZB.png'; // photorealistic tank
+
+    const enemyImg = new Image();
+    enemyImg.src = 'https://i.imgur.com/MOZCwOE.png'; // photorealistic alien
+
+    const houseImg = new Image();
+    houseImg.src = 'https://i.imgur.com/TuSbcUA.png'; // photorealistic house
+
+    function initGame() {
+      player = { x: 270, y: 550, width: 60, height: 30, speed: 5 };
+      bullets = [];
+      enemyBullets = [];
+      score = 0;
+      lives = 3;
+      gameOver = false;
+      houses = [
+        { x: 100, y: 500, width: 60, height: 40, health: 3 },
+        { x: 275, y: 500, width: 60, height: 40, health: 3 },
+        { x: 450, y: 500, width: 60, height: 40, health: 3 }
+      ];
+      enemies = [];
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 8; col++) {
+          enemies.push({ x: 60 * col + 30, y: 60 * row + 30, width: 40, height: 40, dx: 1, dy: 0 });
+        }
+      }
+    }
+
+    function drawPlayer() {
+      ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+    }
+
+    function drawEnemies() {
+      enemies.forEach(e => {
+        ctx.drawImage(enemyImg, e.x, e.y, e.width, e.height);
+      });
+    }
+
+    function drawBullets() {
+      ctx.fillStyle = "yellow";
+      bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+      ctx.fillStyle = "red";
+      enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+    }
+
+    function drawHouses() {
+      houses.forEach(h => {
+        if (h.health > 0) {
+          ctx.globalAlpha = h.health / 3;
+          ctx.drawImage(houseImg, h.x, h.y, h.width, h.height);
+          ctx.globalAlpha = 1;
+        }
+      });
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      // Move player
+      if (keys['ArrowLeft']) player.x -= player.speed;
+      if (keys['ArrowRight']) player.x += player.speed;
+      player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+      // Update bullets
+      bullets = bullets.filter(b => b.y > 0);
+      bullets.forEach(b => b.y -= 10);
+
+      enemyBullets = enemyBullets.filter(b => b.y < canvas.height);
+      enemyBullets.forEach(b => b.y += 4);
+
+      // Enemies movement
+      let hitEdge = enemies.some(e => e.x + e.width >= canvas.width || e.x <= 0);
+      enemies.forEach(e => {
+        e.x += e.dx;
+        if (hitEdge) {
+          e.dx *= -1;
+          e.y += 20;
+        }
+        if (Math.random() < 0.005) {
+          enemyBullets.push({ x: e.x + e.width / 2, y: e.y + e.height, width: 4, height: 10 });
+        }
+      });
+
+      // Bullet collisions
+      bullets.forEach((b, i) => {
+        enemies.forEach((e, j) => {
+          if (b.x < e.x + e.width && b.x + b.width > e.x && b.y < e.y + e.height && b.y + b.height > e.y) {
+            enemies.splice(j, 1);
+            bullets.splice(i, 1);
+            score += 10;
+          }
+        });
+      });
+
+      enemyBullets.forEach((b, i) => {
+        if (b.x < player.x + player.width && b.x + b.width > player.x && b.y < player.y + player.height) {
+          lives--;
+          enemyBullets.splice(i, 1);
+          if (lives <= 0) {
+            gameOver = true;
+            reloadButton.style.display = 'block';
+          }
+        }
+
+        houses.forEach(h => {
+          if (h.health > 0 && b.x < h.x + h.width && b.x + b.width > h.x && b.y < h.y + h.height && b.y + b.height > h.y) {
+            h.health--;
+            enemyBullets.splice(i, 1);
+          }
+        });
+      });
+
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawPlayer();
+      drawEnemies();
+      drawBullets();
+      drawHouses();
+    }
+
+    function loop() {
+      update();
+      draw();
+      if (!gameOver) requestAnimationFrame(loop);
+    }
+
+    document.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === ' ' && !gameOver) {
+        bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, width: 4, height: 10 });
+      }
+    });
+
+    document.addEventListener('keyup', e => keys[e.key] = false);
+
+    reloadButton.addEventListener('click', () => {
+      reloadButton.style.display = 'none';
+      initGame();
+      loop();
+    });
+
+    initGame();
+    loop();
+  </script>
 </body>
 </html>
 
